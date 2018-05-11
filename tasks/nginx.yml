@@ -1,0 +1,45 @@
+
+- name: create directories for nginx
+  file: dest={{ item }} state=directory owner=root
+  with_items:
+    - "/opt/docker/nginx"
+    - "/opt/docker/nginx/conf.d"
+    - "/opt/docker/nginx/logs"
+
+- name: configure nginx
+  template: src={{ item }}.j2 dest=/opt/docker/nginx/{{ item }}
+  with_items:
+    - nginx.conf
+    - proxy.inc
+    - only_office_access.inc
+
+- name: copying htpasswd files
+  copy: src={{ nginx_htpasswd_files_path }}/{{ item }} dest=/opt/docker/nginx/{{ item }}
+  with_items:
+    - elk_passwd.5601.inc
+    - elk_passwd.9200.inc
+
+- name: configure nginx conf.d
+  template: src={{ tmpl }}/nginx/conf.d/{{ item }}.j2 dest=/opt/docker/nginx/conf.d/{{ item }}
+  with_items:
+    - "{{ stage_name }}.octafx.com.conf"
+
+- name: run webserver
+  docker_container:
+    name: webserver-{{ stage_name }}
+    image: "{{ nginx_image }}"
+    restart_policy: "always"
+    docker_api_version: auto
+    volumes:
+      - /opt/docker/nginx:/etc/nginx
+      - /opt/docker/nginx/logs:/var/log/nginx
+    ports:
+      - "80:80"
+      - "8080:8080"
+    links:
+      - kibana-{{ stage_name }}:kibana
+      - elasticsearch-{{ stage_name }}:elasticsearch
+    state: started
+    recreate: true
+  tags:
+    - run_webserver

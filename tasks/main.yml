@@ -1,0 +1,17 @@
+#roles/filebeat/tasks/main.yml
+
+- include: redis.yml
+  when: redis
+  tags:
+    - redis
+
+- include: elk.yml
+  when: elk
+  tags:
+    - elk_run
+
+- include: nginx.yml
+  when: elk
+  tags:
+    - elk_run
+    - nginx_run

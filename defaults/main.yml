@@ -1,0 +1,26 @@
+
+tmpl: "template/elk"
+
+stage_name: "elk"
+filebeat: false
+elk: false
+redis: false
+clean_old_indeces: false
+
+elk_version: "5.4.0"
+xpack_install: false
+jvm_opts: "-Xms4G -Xmx4G"
+
+#elk_image: "sebp/elk"
+redis_image: "dr.ayrex.com/ayrex-redis"
+nginx_image: "dr.ayrex.com/ayrex-webserver"
+
+
+real_rabbitmq_user: "none"
+real_rabbitmq_password: "none"
+
+demo_rabbitmq_user: "none"
+demo_rabbitmq_password: "none"
+vhost_access_log: true
+vhost_access_log_flush: 2m
+vhost_access_log_buffer: 5m

@@ -1,0 +1,40 @@
+#roles/elk/tasks/redis.yml
+
+- name: create stage subdirs
+  file: dest=/opt/docker/{{ stage_name }}//redis/{{ item }} state=directory owner=root group=root
+  with_items:
+    - "data"
+    - "conf"
+  tags: redis_dirs
+
+- name: copy redis config
+  template: src={{ tmpl }}/redis/{{ item }}.j2 dest=/opt/docker/{{ stage_name }}/redis/conf/{{ item }} owner=root group=root
+  with_items:
+    - "redis.conf"
+  tags: 
+    - redis_conf
+
+- name: remove docker with redis
+  docker:
+    name: redis-{{ stage_name }}
+    image: "{{ item }}"
+    state: absent
+    docker_api_version: auto
+  with_items:
+    - "{{ redis_image }}"
+
+- name: run docker with redis
+  docker:
+    name: redis-{{ stage_name }}
+    image: "{{ item }}"
+    state: started
+    docker_api_version: auto
+    volumes:
+      - "/opt/docker/{{ stage_name }}/redis/data:/var/lib/redis"
+      - "/opt/docker/{{ stage_name }}/redis/conf/redis.conf:/var/lib/redis/redis.conf"
+    ports: 
+      - "6379:6379"
+    net: host
+  with_items:
+    - "{{ redis_image }}"
+  

@@ -1,0 +1,48 @@
+daemon off;
+user  www-data;
+worker_processes  auto;
+
+pid        /var/run/nginx.pid;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+#    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    # http_x_forwarded_for changed to upstream_addr
+    log_format access_custom '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$upstream_addr" $request_length '
+                      '$bytes_sent $request_time "$https" $host';
+
+    log_format access_custom2 '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$upstream_addr" $request_length '
+                      '$bytes_sent $upstream_response_time "$https" $host';
+
+    log_format onlyrequest '$msec $request';
+
+    log_format onlyonlyrequest '$request';
+
+    access_log /var/log/nginx/access.log access_custom buffer=5m;
+    error_log /var/log/nginx/error.log;                         # shared error log 
+
+    #access_log  off;
+
+    sendfile        on;
+    #tcp_nopush     on;
+
+    keepalive_timeout  {{ nginx_keepalive_timeout }};
+
+    #gzip  on;
+
+    include /etc/nginx/conf.d/*.conf;
+
+}

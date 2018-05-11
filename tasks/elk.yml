@@ -1,0 +1,107 @@
+
+- name: create directories for elk
+  file: dest={{ item }} state=directory owner=root
+  with_items:
+    - "/opt/docker/{{ stage_name }}/elk/elasticsearch"
+    - "/opt/docker/{{ stage_name }}/elk/kibana"
+    - "/opt/docker/{{ stage_name }}/elk/logstash/conf.d"
+    - "/opt/docker/{{ stage_name }}/bin"
+    - "/opt/docker/{{ stage_name }}/GeoIP"
+  tags:
+    - elk_install
+
+- name: ensure that GeoIP.dat is up-to-date
+  cron:
+    name: "elk GeoIP update"
+    minute: "0"
+    hour: "*/2"
+    job: "cd /opt/docker/{{ stage_name }}/GeoIP/ && curl -O 'http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz' && tar -xvf Geo*.gz 
+          && cp GeoLite2-City_*/GeoLite2-City.mmdb ./GeoLite2-City.mmdb && rm -rf GeoLite2-City_* > /dev/null"
+  tags:
+    - elk_install
+
+
+- name: copy script for clean elk
+  copy: src={{ tmpl }}/{{ item }} dest=/opt/docker/{{ stage_name }}/bin/{{ item }} mode=0700
+  when: clean_old_indeces
+  with_items:
+    - "cleanOldInd.sh"
+  tags: 
+    - elk_clean_indeces
+
+- name: create cron task for clean old indeces in elasticsearch
+  cron: name="clean old indeces" special_time="monthly" job="/opt/docker/{{ stage_name }}/bin/{{ item }}"
+  when: clean_old_indeces
+  with_items:
+    - "cleanOldInd.sh"
+  tags: 
+    - elk_clean_indeces
+
+- name: run elasticsearch container
+  docker_container:
+    name: elasticsearch-{{ stage_name }}
+    image: elasticsearch:{{ elk_version }}
+    api_version: auto
+    state: started
+    restart_policy: always
+    env:
+      ES_JAVA_OPTS: "{{ jvm_opts }}"
+    volumes:
+      - "/opt/docker/{{ stage_name }}/elk/elasticsearch/data:/usr/share/elasticsearch/data"
+  tags:
+    - run_elast
+    - elk_install
+
+- name: install x-pack for elasticsearch
+  shell: docker exec -i elasticsearch-{{ stage_name }} bash -c "bin/elasticsearch-plugin install x-pack --batch" && sleep 10 && docker restart elasticsearch-{{ stage_name }}
+  when: xpack_install
+  tags:
+    - elk_install
+
+- name: run kibana container
+  docker_container:
+    name: kibana-{{ stage_name }}
+    image: kibana:{{ elk_version }}
+    api_version: auto
+    state: started
+    restart_policy: always
+    links:
+      - elasticsearch-{{ stage_name }}:elasticsearch
+  tags:
+    - kibana_run
+    - elk_install
+
+- name: install x-pack for kibana
+  shell: docker exec -i kibana-{{ stage_name }} bash -c "/usr/share/kibana/bin/kibana-plugin install x-pack" && sleep 10 && docker restart kibana-{{ stage_name }}
+  when: xpack_install
+  tags:
+    - elk_install
+
+- name: copy logstash configs to logstash's folder
+  template: src={{ tmpl }}/logstash/conf.d/{{ item }} dest=/opt/docker/{{ stage_name }}/elk/logstash/conf.d/{{ item }} owner=root group=root
+  with_items:
+    - "01-input.conf"
+    - "10-filter.conf"
+    - "20-output.conf"
+  tags: 
+    - logstash_conf
+    - logstash_run
+
+- name: run logstash container
+  docker_container:
+    name: logstash-{{ stage_name }}
+    image: logstash:{{ elk_version }}
+    api_version: auto
+    state: started
+    restart_policy: always
+    command: "-f /etc/logstash/conf.d -l /var/log/logstash/logstash.log"
+    links:
+      - elasticsearch-{{ stage_name }}:elasticsearch
+    volumes:
+      - /opt/docker/{{ stage_name }}/elk/logstash/conf.d:/etc/logstash/conf.d
+      - /opt/docker/{{ stage_name }}/GeoIP/:/usr/share/GeoIP/
+    ports:
+      - "5544:5544"
+  tags:
+    - logstash_run
+    - elk_install
